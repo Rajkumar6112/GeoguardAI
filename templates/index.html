@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Landslide Detection Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+    <style>
+        body {
+            font-family: "Segoe UI", Arial, sans-serif;
+            background: linear-gradient(135deg, #020617, #0f172a);
+            color: #f8fafc;
+            text-align: center;
+            padding: 20px;
+        }
+
+        h1 {
+            margin-bottom: 25px;
+            background: linear-gradient(to right, #38bdf8, #22c55e);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-size: 32px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 15px;
+            max-width: 100%;
+            margin: auto;
+        }
+
+        .card {
+            background: #020617;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 0 25px rgba(56, 189, 248, 0.4);
+        }
+
+        .label {
+            font-size: 14px;
+            color: #94a3b8;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+        }
+
+        .value {
+            font-size: 34px;
+            font-weight: bold;
+            color: #38bdf8;
+        }
+
+        .rf {
+            color: #facc15;
+        }
+
+        .dt {
+            color: #22c55e;
+        }
+
+        .risk-box {
+            grid-column: 1 / -1;
+            padding: 30px;
+            border-radius: 18px;
+            margin-top: 10px;
+            box-shadow: 0 0 20px rgba(255,255,255,0.1);
+            transition: all 0.4s ease;
+        }
+
+        .risk-low {
+            background: linear-gradient(135deg, #052e16, #166534);
+            box-shadow: 0 0 25px rgba(34, 197, 94, 0.6);
+            color: #22c55e;
+        }
+
+        .risk-medium {
+            background: linear-gradient(135deg, #422006, #713f12);
+            box-shadow: 0 0 25px rgba(250, 204, 21, 0.6);
+            color: #facc15;
+        }
+
+        .risk-high {
+            background: linear-gradient(135deg, #450a0a, #7f1d1d);
+            box-shadow: 0 0 25px rgba(239, 68, 68, 0.6);
+            color: #ef4444;
+        }
+
+        .risk-value {
+            font-size: 48px;
+            font-weight: bold;
+            margin-top: 10px;
+            letter-spacing: 3px;
+        }
+
+        .footer {
+            margin-top: 40px;
+            font-size: 13px;
+            color: #94a3b8;
+        }
+
+        .alert {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #7f1d1d;
+            color: #fca5a5;
+            padding: 15px 20px;
+            border-radius: 10px;
+            font-weight: bold;
+            display: none;
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.7);
+            z-index: 1000;
+        }
+
+        .risk-box {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 10px rgba(255,255,255,0.2); }
+            50% { box-shadow: 0 0 25px rgba(255,255,255,0.5); }
+            100% { box-shadow: 0 0 10px rgba(255,255,255,0.2); }
+        }
+
+        @media (max-width: 600px) {
+            .value {
+                font-size: 22px;
+            }
+
+            .risk-value {
+                font-size: 30px;
+            }
+        }
+    </style>
+
+</head>
+
+<body>
+
+    <h1>🌍 Landslide Detection IoT Dashboard</h1>
+
+    <div class="alert" id="alertBox">
+        ⚠️ HIGH RISK OF LANDSLIDE DETECTED!
+    </div>
+
+    <div class="grid">
+        <div style="margin-bottom:20px;">
+            <input type="text" id="cityInput" placeholder="Enter City Name" style="padding:10px; width:220px; border-radius:8px; border:none;">
+            <button onclick="searchCity()" style="padding:10px 15px; border:none; border-radius:8px; background:#22c55e; color:white;">
+                Search
+            </button>
+        </div>
+
+        <div class="card" style="grid-column: 1 / -1;">
+            <div class="label">LOCATION MAP</div>
+            <div id="map" style="height: 300px;"></div>
+        </div>
+
+        <div class="card">
+            <div class="label">SOIL MOISTURE</div>
+            <div class="value" id="soil">--</div>
+        </div>
+
+        <div class="card">
+            <div class="label">RAIN SENSOR</div>
+            <div class="value" id="rain">--</div>
+        </div>
+
+        <div class="card">
+            <div class="label">RANDOM FOREST</div>
+            <div class="value rf" id="rf">--</div>
+        </div>
+
+        <div class="card">
+            <div class="label">DECISION TREE</div>
+            <div class="value dt" id="dt">--</div>
+        </div>
+
+        <div class="card">
+            <div class="label">LOCATION</div>
+            <div class="value" id="city">--</div>
+        </div>
+
+        <div class="card">
+            <div class="label">TEMPERATURE (°C)</div>
+            <div class="value" id="temperature">--</div>
+        </div>
+
+        <div class="card">
+            <div class="label">HUMIDITY (%)</div>
+            <div class="value" id="humidity">--</div>
+        </div>
+
+        <div class="card">
+            <div class="label">MODEL AGREEMENT</div>
+            <div class="value" id="agreement">--</div>
+        </div>
+
+
+        <div class="risk-box" id="riskBox">
+            <div class="label">LANDSLIDE RISK LEVEL</div>
+            <div class="risk-value" id="risk">--</div>
+        </div>
+
+        <div class="card" style="grid-column: 1 / -1;">
+            <div class="label">RISK TREND (Last 20 Updates)</div>
+            <canvas id="riskChart" height="120"></canvas>
+        </div>
+
+        <div class="card" style="grid-column: 1 / -1;">
+            <div class="label">RAIN SENSOR TREND</div>
+            <canvas id="rainChart" height="120"></canvas>
+        </div>
+    </div>
+
+    <div class="footer">
+        Real-Time IoT + DL Landslide Monitoring System
+    </div>
+
+    <script>
+        let riskHistory = [];
+
+        const ctx = document.getElementById("riskChart").getContext("2d");
+
+        const riskChart = new Chart(ctx, {
+            type: "line",
+            data: {
+                labels: [],
+                datasets: [{
+                    label: "Risk Level",
+                    data: [],
+                    borderColor: "#ef4444",
+                    backgroundColor: "rgba(239, 68, 68, 0.2)",
+                    tension: 0.3
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        min: 0,
+                        max: 2,
+                        ticks: {
+                            callback: function(value) {
+                                if (value === 0) return "LOW";
+                                if (value === 1) return "MEDIUM";
+                                if (value === 2) return "HIGH";
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        let rainHistory = [];
+
+        const rainCtx = document.getElementById("rainChart").getContext("2d");
+
+        const rainChart = new Chart(rainCtx, {
+            type: "line",
+            data: {
+                labels: [],
+                datasets: [{
+                    label: "Rain Sensor Value",
+                    data: [],
+                    borderColor: "#38bdf8",
+                    backgroundColor: "rgba(56,189,248,0.2)",
+                    tension: 0.3
+                }]
+            }
+        });
+
+        function getLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    position => {
+                        const lat = position.coords.latitude.toFixed(4);
+                        const lon = position.coords.longitude.toFixed(4);
+
+                        document.getElementById("location").innerText = `Lat: ${lat}, Lon: ${lon}`;
+                    },
+                    error => {
+                        document.getElementById("location").innerText = "Location permission denied";
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 0
+                    }
+                );
+            } else {
+                document.getElementById("location").innerText = "Geolocation not supported";
+            }
+        }
+
+
+        getLocation();
+
+        let selectedCity = "Coimbatore";
+
+        function searchCity() {
+            console.log("Searching for:", selectedCity);
+            selectedCity = document.getElementById("cityInput").value.trim();
+            if(selectedCity === ""){
+                alert("Please enter a city name");
+                return;
+            }
+            fetchData();    
+        }
+
+        let map = L.map('map').setView([11.0168, 76.9558], 10); // default Coimbatore
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        let marker = L.marker([11.0168, 76.9558]).addTo(map);
+
+        function fetchData() {
+            fetch(`/data?city=${selectedCity}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.rain_sensor !== null) {
+                        rainHistory.push(data.rain_sensor);
+                        if (rainHistory.length > 20) rainHistory.shift();
+
+                        rainChart.data.labels = rainHistory.map((_, i) => i + 1);
+                        rainChart.data.datasets[0].data = rainHistory;
+                        rainChart.update();
+                    }
+
+                    if (data.error) {
+                        document.getElementById("risk").innerText = data.error;
+                        return;
+                    }
+
+                    document.getElementById("soil").innerText = data.soil_moisture;
+                    document.getElementById("rain").innerText = data.rain_sensor;
+                    document.getElementById("rf").innerText = data.rf_prediction;
+                    document.getElementById("dt").innerText = data.dt_prediction;
+                    document.getElementById("temperature").innerText = data.temperature ?? "--";
+                    document.getElementById("humidity").innerText = data.humidity ?? "--";
+                    document.getElementById("city").innerText = data.city;
+
+                    const agreementText = document.getElementById("agreement");
+
+                    if (data.rf_prediction === data.dt_prediction) {
+                        agreementText.innerText = "STRONG";
+                        agreementText.style.color = "#22c55e";
+                    } else {
+                        agreementText.innerText = "WEAK";
+                        agreementText.style.color = "#facc15";
+                    }
+
+
+                    const riskBox = document.getElementById("riskBox");
+                    const riskText = document.getElementById("risk");
+
+                    riskText.innerText = data.risk_level;
+
+                    const alertBox = document.getElementById("alertBox");
+
+                    const alertSound = document.getElementById("alertSound");
+
+                    if (data.risk_level === "HIGH") {
+                        alertBox.style.display = "block";
+                        alertSound.play();
+                    } else {
+                        alertBox.style.display = "none";
+                        alertSound.pause();
+                        alertSound.currentTime = 0;
+                    }
+
+                    riskBox.className = "risk-box";
+
+                    if (data.risk_level === "LOW") {
+                        riskBox.classList.add("risk-low");
+                    } else if (data.risk_level === "MEDIUM") {
+                        riskBox.classList.add("risk-medium");
+                    } else if (data.risk_level === "HIGH") {
+                        riskBox.classList.add("risk-high");
+                    }
+
+                    // 📊 Update Risk Trend Chart
+                    let riskValue = 0;
+
+                    if (data.risk_level === "LOW") riskValue = 0;
+                    if (data.risk_level === "MEDIUM") riskValue = 1;
+                    if (data.risk_level === "HIGH") riskValue = 2;
+
+                    riskHistory.push(riskValue);
+                    if (riskHistory.length > 20) riskHistory.shift();
+
+                    riskChart.data.labels = riskHistory.map((_, i) => i + 1);
+                    riskChart.data.datasets[0].data = riskHistory;
+                    riskChart.update();
+
+                })
+                .catch(err => {
+                    console.error("Error fetching data:", err);
+                });
+                if (data.latitude && data.longitude) {
+                    map.setView([data.latitude, data.longitude], 10);
+                    marker.setLatLng([data.latitude, data.longitude]);
+                }
+
+        }
+
+        setInterval(fetchData, 3000);
+        fetchData();
+    </script>
+
+    <audio id="alertSound">
+        <source src="https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg" type="audio/ogg">
+    </audio>
+
+</body>
+</html>
