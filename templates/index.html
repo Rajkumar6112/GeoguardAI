@@ -162,7 +162,7 @@
 
         <div class="card" style="grid-column: 1 / -1;">
             <div class="label">LOCATION MAP</div>
-            <div id="map" style="height: 300px;"></div>
+            <div id="map" style="height: 300px; margin-top: 20px; border-radius: 12px;"></div>
         </div>
 
         <div class="card">
@@ -317,13 +317,43 @@
             fetchData();    
         }
 
-        let map = L.map('map').setView([11.0168, 76.9558], 10); // default Coimbatore
+        // Default location (Coimbatore)
+        let map = L.map('map').setView([11.0168, 76.9558], 10);
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors'
         }).addTo(map);
 
+        // Create marker
         let marker = L.marker([11.0168, 76.9558]).addTo(map);
+
+        // Function to update map location
+        function updateMap(lat, lon, risk) {
+
+        map.setView([lat, lon], 10, { animate: true });
+
+        marker.setLatLng([lat, lon]);
+
+        // Change marker icon color based on risk
+        let color = "green";
+
+        if (risk === "MEDIUM") color = "orange";
+        if (risk === "HIGH") color = "red";
+
+        let icon = L.divIcon({
+            className: '',
+            html: `<div style="
+                background:${color};
+                width:18px;
+                height:18px;
+                border-radius:50%;
+                border:3px solid white;
+                box-shadow:0 0 10px ${color};
+            "></div>`
+    });
+
+    marker.setIcon(icon);
+}
 
         function fetchData() {
             fetch(`/data?city=${selectedCity}`)
@@ -404,15 +434,14 @@
                     riskChart.data.datasets[0].data = riskHistory;
                     riskChart.update();
 
+                    if (data.lat && data.lon) {
+                        updateMap(data.lat, data.lon, data.risk_level);
+                    }
+
                 })
                 .catch(err => {
                     console.error("Error fetching data:", err);
                 });
-                if (data.latitude && data.longitude) {
-                    map.setView([data.latitude, data.longitude], 10);
-                    marker.setLatLng([data.latitude, data.longitude]);
-                }
-
         }
 
         setInterval(fetchData, 3000);

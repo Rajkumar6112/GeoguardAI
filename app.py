@@ -7,6 +7,8 @@ import csv
 from datetime import datetime
 import requests
 import os
+import time
+import pandas as pd
 from flask import request
 app = Flask(__name__)
 
@@ -50,22 +52,30 @@ def get_data():
     api_key = "f72f8c6c200cfb972d6a5c234a1f9a65"
     weather_url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}&units=metric"
 
+    temperature = None
+    humidity = None
+    weather_desc = "Unavailable"
+    city_name = city
+    lat = None
+    lon = None
     try:
         response = requests.get(weather_url)
         weather_json = response.json()
 
-        temperature = weather_json["main"]["temp"]
-        humidity = weather_json["main"]["humidity"]
-        weather_desc = weather_json["weather"][0]["description"]
-        city_name = weather_json["name"]
+        if response.status_code == 200 and "main" in weather_json:
+            temperature = weather_json["main"]["temp"]
+            humidity = weather_json["main"]["humidity"]
+            weather_desc = weather_json["weather"][0]["description"]
+            city_name = weather_json["name"]
+            lat = weather_json["coord"]["lat"]
+            lon = weather_json["coord"]["lon"]
+        
+        else:
+            print("Weather API error", weather_json)
 
+        
     except Exception as e:
-        print("Weather error:", e)
-        temperature = None
-        humidity = None
-        weather_desc = "Unavailable"
-        city_name = city
-
+        print("Weather request failed", e)
     
     # 🔹 SENSOR READING
     if arduino and arduino.in_waiting > 0:
@@ -80,7 +90,7 @@ def get_data():
             
     # 🔹 Prediction only if both values exist
     if last_soil is not None and last_rain is not None:
-        features = np.array([[last_soil, last_rain]])
+        features = pd.DataFrame([[last_soil, last_rain]], columns = ["Soil Moisture", "Rain Sensor"])
         features_scaled = scaler.transform(features)
 
         rf_pred = rf_model.predict(features_scaled)[0]
@@ -92,8 +102,6 @@ def get_data():
             risk_level = "MEDIUM"
         else:
             risk_level = "LOW"
-        
-        import time
 
         if risk_level == "HIGH":
             current_time = time.time()
@@ -108,9 +116,9 @@ def get_data():
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 last_soil,
                 last_rain,
-                rf_pred,
-                dt_pred,
-                risk_level
+                temperature,
+                humidity,
+                1 id risk_level == "HIGH" else 0
             ])
 
     return jsonify({
@@ -122,7 +130,9 @@ def get_data():
         "city": city_name,
         "temperature": float(temperature) if temperature is not None else None,
         "humidity": int(humidity) if humidity is not None else None,
-        "weather": weather_desc
+        "weather": weather_desc,
+        "lat": float(lat) if lat is not None else None,
+        "lon": float(lon) if lon is not None else None
     })
 
 @app.route("/")
@@ -130,7 +140,7 @@ def index():
     return render_template("index.html")
 
 def send_telegram_alert(message):
-    bot_token = "8439813496:AAH48zsfx5H46vNIGNt7tqc0dxGAjtpaiak"
+    bot_token = "8496227214:AAGoPNqauJywQjbX8orHQXPXd6AxgBuc9TM"
     chat_id = "1727206518"
 
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
@@ -144,6 +154,33 @@ def send_telegram_alert(message):
         print("📩 Telegram alert sent!")
     except Exception as e:
         print("Telegram error:", e)
+        
+@app.route("/analytics")
+def analytics():
+    try:
+        import pandas as pd
+
+        df = pd.read_csv("prediction_log.csv")
+
+        # Print columns for debugging
+        print("Columns:", df.columns)
+
+        total_records = len(df)
+
+        high_count = len(df[df.iloc[:, -1] == "HIGH"])
+        medium_count = len(df[df.iloc[:, -1] == "MEDIUM"])
+        low_count = len(df[df.iloc[:, -1] == "LOW"])
+
+        return render_template(
+            "analytics.html",
+            total=total_records,
+            high=high_count,
+            medium=medium_count,
+            low=low_count
+        )
+
+    except Exception as e:
+        return f"Error loading analytics: {e}"
 
 if __name__ == "__main__":
     app.run(host = "0.0.0.0", port = int(os.environ.get("PORT",5000)))

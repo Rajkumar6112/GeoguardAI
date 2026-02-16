@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GeoGuardAI Analytics</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            background: #0f172a;
+            color: white;
+            font-family: Arial;
+            text-align: center;
+            padding: 20px;
+        }
+
+        h1 {
+            color: #38bdf8;
+        }
+
+        .stats {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            margin-bottom: 40px;
+        }
+
+        .card {
+            background: #1e293b;
+            padding: 20px;
+            border-radius: 10px;
+            width: 150px;
+        }
+
+        canvas {
+            max-width: 600px;
+            margin: auto;
+        }
+    </style>
+</head>
+<body>
+
+<h1>📊 GeoGuardAI Historical Analytics</h1>
+
+<div class="stats">
+    <div class="card">
+        <h3>Total Records</h3>
+        <p>{{ total }}</p>
+    </div>
+
+    <div class="card">
+        <h3>High Risk</h3>
+        <p>{{ high }}</p>
+    </div>
+
+    <div class="card">
+        <h3>Medium Risk</h3>
+        <p>{{ medium }}</p>
+    </div>
+
+    <div class="card">
+        <h3>Low Risk</h3>
+        <p>{{ low }}</p>
+    </div>
+</div>
+
+<canvas id="riskChart"></canvas>
+
+<script>
+const ctx = document.getElementById('riskChart');
+
+new Chart(ctx, {
+    type: 'bar',
+    data: {
+        labels: ['High', 'Medium', 'Low'],
+        datasets: [{
+            label: 'Risk Distribution',
+            data: [{{ high }}, {{ medium }}, {{ low }}],
+            backgroundColor: [
+                'rgba(239, 68, 68, 0.8)',
+                'rgba(250, 204, 21, 0.8)',
+                'rgba(34, 197, 94, 0.8)'
+            ]
+        }]
+    }
+});
+</script>
+
+</body>
+</html>
