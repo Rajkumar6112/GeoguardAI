@@ -8,6 +8,8 @@ from sklearn.metrics import accuracy_score
 import joblib
 
 df = pd.read_csv("prediction_log.csv")
+print(df.columns)
+exit()
 
 # Features upgraded
 X = df[["Soil Moisture", "Rain Sensor", "Temperature", "Humidity"]]

@@ -38,6 +38,18 @@ latest_data = {}
 
 last_alert_time = 0
 
+if not os.path.exists("prediction_log.csv"):
+    with open("prediction_log.csv", "w", newline="") as file:
+        writer = csv.writer(file)
+        writer.writerow([
+            "Timestamp",
+            "Soil Moisture",
+            "Rain Sensor",
+            "Temperature",
+            "Humidity",
+            "Landslide Occurrence"
+        ])
+
 @app.route("/data")
 def get_data():
     global last_soil, last_rain, last_alert_time
@@ -118,7 +130,7 @@ def get_data():
                 last_rain,
                 temperature,
                 humidity,
-                1 id risk_level == "HIGH" else 0
+                1 if risk_level == "HIGH" else 0
             ])
 
     return jsonify({
