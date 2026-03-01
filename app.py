@@ -111,6 +111,13 @@ def get_data():
     rf_confidence = None
     dt_confidence = None
 
+    # Cloud fallback
+    if arduino is None:
+        if last_soil is None:
+            last_soil = np.random.randint(400, 900)
+        if last_rain is None:
+            last_rain = np.random.randint(300, 800)
+
     if last_soil is not None and last_rain is not None:
 
         features = pd.DataFrame(
@@ -173,7 +180,7 @@ def get_data():
         "rain_sensor": last_rain,
         "risk_score": risk_score,
         "risk_level": risk_level,
-        "rf_prediction":int(rf_pred)if rf_pred is not None else None,
+        "rf_prediction": int(rf_pred) if rf_pred is not None else None,
         "dt_prediction": int(dt_pred) if dt_pred is not None else None,
         "rf_confidence": rf_confidence,
         "dt_confidence": dt_confidence,
