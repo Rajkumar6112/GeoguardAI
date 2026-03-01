@@ -1,18 +1,19 @@
-from flask import Flask, jsonify, render_template
+from flask import Flask, jsonify, render_template, request
 import serial
 import time
 import joblib
 import numpy as np
-import csv 
+import csv
 from datetime import datetime
 import requests
 import os
-import time
 import pandas as pd
-from flask import request
+
 app = Flask(__name__)
 
-# Load trained models and scaler
+# ==============================
+# LOAD MODELS
+# ==============================
 rf_model = joblib.load("random_forest_model.pkl")
 dt_model = joblib.load("decision_tree_model.pkl")
 scaler = joblib.load("scaler.pkl")
@@ -20,24 +21,27 @@ scaler = joblib.load("scaler.pkl")
 arduino = None
 last_soil = None
 last_rain = None
-# Connect to Arduino (change COM port if needed)
+last_alert_time = 0
+
 print("🔧 Starting Flask backend...")
 
+# ==============================
+# ARDUINO CONNECTION (LOCAL ONLY)
+# ==============================
 if os.environ.get("RENDER") == "true":
     print("🌐 Running in cloud mode (Arduino disabled)")
 else:
     try:
-        arduino = serial.Serial('COM12',  9600, timeout = 2)
+        arduino = serial.Serial('COM12', 9600, timeout=2)
         time.sleep(2)
         print("✅ Arduino connected on COM12")
     except Exception as e:
         arduino = None
         print("⚠️ Arduino not connected:", e)
 
-latest_data = {}
-
-last_alert_time = 0
-
+# ==============================
+# CREATE LOG FILE IF NOT EXISTS
+# ==============================
 if not os.path.exists("prediction_log.csv"):
     with open("prediction_log.csv", "w", newline="") as file:
         writer = csv.writer(file)
@@ -47,29 +51,31 @@ if not os.path.exists("prediction_log.csv"):
             "Rain Sensor",
             "Temperature",
             "Humidity",
-            "Landslide Occurrence"
+            "Risk Score"
         ])
 
+# ==============================
+# MAIN DATA ROUTE
+# ==============================
 @app.route("/data")
 def get_data():
     global last_soil, last_rain, last_alert_time
 
-    rf_pred = None
-    dt_pred = None
-    risk_level = "LOW"
-
     city = request.args.get("city", "Coimbatore")
 
-    # 🌦 ALWAYS fetch weather
-    api_key = "f72f8c6c200cfb972d6a5c234a1f9a65"
-    weather_url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}&units=metric"
-
-    temperature = None
-    humidity = None
+    temperature = 0
+    humidity = 0
     weather_desc = "Unavailable"
     city_name = city
     lat = None
     lon = None
+
+    # ==============================
+    # WEATHER FETCH
+    # ==============================
+    api_key = os.environ.get("OPENWEATHER_API_KEY")
+    weather_url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}&units=metric"
+
     try:
         response = requests.get(weather_url)
         weather_json = response.json()
@@ -81,47 +87,70 @@ def get_data():
             city_name = weather_json["name"]
             lat = weather_json["coord"]["lat"]
             lon = weather_json["coord"]["lon"]
-        
-        else:
-            print("Weather API error", weather_json)
 
-        
     except Exception as e:
-        print("Weather request failed", e)
-    
-    # 🔹 SENSOR READING
+        print("Weather Error:", e)
+
+    # ==============================
+    # SENSOR READING
+    # ==============================
     if arduino and arduino.in_waiting > 0:
         line = arduino.readline().decode('utf-8', errors='ignore').strip()
         print("🔹 Serial:", line)
 
         if "Soil" in line:
             last_soil = int(line.split(":")[1].strip())
-            
+
         elif "Rain" in line:
             last_rain = int(line.split(":")[1].strip())
-            
-    # 🔹 Prediction only if both values exist
+
+    risk_score = 0
+    risk_level = "LOW"
+    rf_confidence = None
+    dt_confidence = None
+
+    # ==============================
+    # PREDICTION
+    # ==============================
     if last_soil is not None and last_rain is not None:
-        features = pd.DataFrame([[last_soil, last_rain]], columns = ["Soil Moisture", "Rain Sensor"])
+
+        features = pd.DataFrame(
+            [[last_soil, last_rain, temperature, humidity]],
+            columns=["Soil Moisture", "Rain Sensor", "Temperature", "Humidity"]
+        )
+
         features_scaled = scaler.transform(features)
 
-        rf_pred = rf_model.predict(features_scaled)[0]
-        dt_pred = dt_model.predict(features_scaled)[0]
+        rf_prob = rf_model.predict_proba(features_scaled)[0][1]
+        dt_prob = dt_model.predict_proba(features_scaled)[0][1]
 
-        if last_soil < 400 and last_rain < 300:
-            risk_level = "HIGH"
-        elif last_soil < 700 and last_rain < 700:
+        risk_score = int(rf_prob * 100)
+
+        rf_confidence = round(rf_prob * 100, 2)
+        dt_confidence = round(dt_prob * 100, 2)
+
+        # Risk Level from ML probability
+        if risk_score < 30:
+            risk_level = "LOW"
+        elif risk_score < 60:
             risk_level = "MEDIUM"
         else:
-            risk_level = "LOW"
+            risk_level = "HIGH"
 
+        # ==============================
+        # TELEGRAM ALERT (Cooldown 60s)
+        # ==============================
         if risk_level == "HIGH":
             current_time = time.time()
             if current_time - last_alert_time > 60:
-                send_telegram_alert(f"⚠️ HIGH Landslide Risk!\nSoil: {last_soil}\nRain: {last_rain}")
-                last_alert_time =current_time
+                send_telegram_alert(
+                    f"⚠️ HIGH Landslide Risk!\nCity: {city_name}\nRisk Score: {risk_score}%"
+                )
+                last_alert_time = current_time
 
-        # 📝 Log
+        # ==============================
+        # LOG DATA
+        # ==============================
         with open("prediction_log.csv", "a", newline="") as file:
             writer = csv.writer(file)
             writer.writerow([
@@ -130,58 +159,57 @@ def get_data():
                 last_rain,
                 temperature,
                 humidity,
-                1 if risk_level == "HIGH" else 0
+                risk_score
             ])
 
     return jsonify({
-        "soil_moisture": int(last_soil) if last_soil is not None else None,
-        "rain_sensor": int(last_rain) if last_rain is not None else None,
-        "rf_prediction": int(rf_pred) if rf_pred is not None else None,
-        "dt_prediction": int(dt_pred) if dt_pred is not None else None,
+        "soil_moisture": last_soil,
+        "rain_sensor": last_rain,
+        "risk_score": risk_score,
         "risk_level": risk_level,
+        "rf_confidence": rf_confidence,
+        "dt_confidence": dt_confidence,
         "city": city_name,
-        "temperature": float(temperature) if temperature is not None else None,
-        "humidity": int(humidity) if humidity is not None else None,
+        "temperature": temperature,
+        "humidity": humidity,
         "weather": weather_desc,
-        "lat": float(lat) if lat is not None else None,
-        "lon": float(lon) if lon is not None else None
+        "lat": lat,
+        "lon": lon
     })
 
-@app.route("/")
-def index():
-    return render_template("index.html")
 
+# ==============================
+# TELEGRAM FUNCTION
+# ==============================
 def send_telegram_alert(message):
-    bot_token = "8496227214:AAGoPNqauJywQjbX8orHQXPXd6AxgBuc9TM"
-    chat_id = "1727206518"
+    bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+
+    if not bot_token or not chat_id:
+        return
 
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-    
-    payload = {
-        "chat_id": chat_id,
-        "text": message
-    }
+
     try:
-        requests.post(url, data=payload)
+        requests.post(url, data={"chat_id": chat_id, "text": message})
         print("📩 Telegram alert sent!")
     except Exception as e:
-        print("Telegram error:", e)
-        
+        print("Telegram Error:", e)
+
+
+# ==============================
+# ANALYTICS ROUTE
+# ==============================
 @app.route("/analytics")
 def analytics():
     try:
-        import pandas as pd
-
         df = pd.read_csv("prediction_log.csv")
-
-        # Print columns for debugging
-        print("Columns:", df.columns)
 
         total_records = len(df)
 
-        high_count = len(df[df.iloc[:, -1] == "HIGH"])
-        medium_count = len(df[df.iloc[:, -1] == "MEDIUM"])
-        low_count = len(df[df.iloc[:, -1] == "LOW"])
+        high_count = len(df[df["Risk Score"] >= 60])
+        medium_count = len(df[(df["Risk Score"] >= 30) & (df["Risk Score"] < 60)])
+        low_count = len(df[df["Risk Score"] < 30])
 
         return render_template(
             "analytics.html",
@@ -194,5 +222,11 @@ def analytics():
     except Exception as e:
         return f"Error loading analytics: {e}"
 
+
+@app.route("/")
+def index():
+    return render_template("index.html")
+
+
 if __name__ == "__main__":
-    app.run(host = "0.0.0.0", port = int(os.environ.get("PORT",5000)))
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))

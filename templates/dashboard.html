@@ -45,6 +45,9 @@
                 .then(data => {
                     document.getElementById("soil_moisture").innerText = data.soil_moisture;
                     document.getElementById("rain_sensor").innerText = data.rain_sensor;
+                    document.getElementById("rf_confidence").innerText = data.rf_confidence ?? "--";
+                    document.getElementById("dt_confidence").innerText = data.dt_confidence ?? "--";
+
 
                     let statusEl = document.getElementById("landslide_status");
                     if (data.landslide_occurrence === 1) {
