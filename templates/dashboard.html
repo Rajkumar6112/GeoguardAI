@@ -47,7 +47,19 @@
                     document.getElementById("rain_sensor").innerText = data.rain_sensor;
                     document.getElementById("rf_confidence").innerText = data.rf_confidence ?? "--";
                     document.getElementById("dt_confidence").innerText = data.dt_confidence ?? "--";
+                    document.getElementById("riskScore").innerText = data.risk_score ? data.risk_score + " %" : "--";
+                    document.getElementById("rf").innerText = data.rf_prediction ?? "--";
+                    document.getElementById("dt").innerText = data.dt_prediction ?? "--";
+                    
+                    let scoreElement = document.getElementById("riskScore");
 
+                    if (data.risk_score >= 70) {
+                        scoreElement.style.color = "#ef4444";
+                    } else if (data.risk_score >= 40) {
+                        scoreElement.style.color = "#facc15";
+                    } else {
+                        scoreElement.style.color = "#22c55e";
+                    }
 
                     let statusEl = document.getElementById("landslide_status");
                     if (data.landslide_occurrence === 1) {

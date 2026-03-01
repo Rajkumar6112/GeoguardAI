@@ -106,12 +106,11 @@ def get_data():
 
     risk_score = 0
     risk_level = "LOW"
+    rf_pred = None
+    dt_pred = None
     rf_confidence = None
     dt_confidence = None
 
-    # ==============================
-    # PREDICTION
-    # ==============================
     if last_soil is not None and last_rain is not None:
 
         features = pd.DataFrame(
@@ -121,22 +120,29 @@ def get_data():
 
         features_scaled = scaler.transform(features)
 
+        # ✅ Proper Predictions
+        rf_pred = rf_model.predict(features_scaled)[0]
+        dt_pred = dt_model.predict(features_scaled)[0]
+
+        # ✅ Proper Probabilities
         rf_prob = rf_model.predict_proba(features_scaled)[0][1]
         dt_prob = dt_model.predict_proba(features_scaled)[0][1]
 
-        risk_score = int(rf_prob * 100)
+        # ✅ Risk Score (0–100)
+        avg_prob = (rf_prob + dt_prob) / 2
+        risk_score = round(avg_prob * 100, 2)
 
         rf_confidence = round(rf_prob * 100, 2)
         dt_confidence = round(dt_prob * 100, 2)
 
-        # Risk Level from ML probability
-        if risk_score < 30:
-            risk_level = "LOW"
-        elif risk_score < 60:
+        # ✅ Risk Level
+        if risk_score >= 70:
+            risk_level = "HIGH"
+        elif risk_score >= 40:
             risk_level = "MEDIUM"
         else:
-            risk_level = "HIGH"
-
+            risk_level = "LOW"
+        
         # ==============================
         # TELEGRAM ALERT (Cooldown 60s)
         # ==============================
@@ -167,6 +173,8 @@ def get_data():
         "rain_sensor": last_rain,
         "risk_score": risk_score,
         "risk_level": risk_level,
+        "rf_prediction":int(rf_pred)if rf_pred is not None else None,
+        "dt_prediction": int(dt_pred) if dt_pred is not None else None,
         "rf_confidence": rf_confidence,
         "dt_confidence": dt_confidence,
         "city": city_name,
