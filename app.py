@@ -1,5 +1,4 @@
 from flask import Flask, jsonify, render_template, request
-import serial
 import time
 import joblib
 import numpy as np
@@ -18,26 +17,11 @@ rf_model = joblib.load("random_forest_model.pkl")
 dt_model = joblib.load("decision_tree_model.pkl")
 scaler = joblib.load("scaler.pkl")
 
-arduino = None
 last_soil = None
 last_rain = None
 last_alert_time = 0
 
 print("🔧 Starting Flask backend...")
-
-# ==============================
-# ARDUINO CONNECTION (LOCAL ONLY)
-# ==============================
-if os.environ.get("RENDER") == "true":
-    print("🌐 Running in cloud mode (Arduino disabled)")
-else:
-    try:
-        arduino = serial.Serial('COM12', 9600, timeout=2)
-        time.sleep(2)
-        print("✅ Arduino connected on COM12")
-    except Exception as e:
-        arduino = None
-        print("⚠️ Arduino not connected:", e)
 
 # ==============================
 # CREATE LOG FILE IF NOT EXISTS
@@ -107,19 +91,33 @@ def get_data():
     except Exception as e:
         print("Weather Error:", e)
 
+    forecast_rain = 0
+    forecast_humidity = 0
+    forecast_temp = 0
+
+    forecast_url = f"http://api.openweathermap.org/data/2.5/forecast?q={city}&appid={api_key}&units=metric"
+
+    try:
+        forecast_response = requests.get(forecast_url)
+        forecast_json = forecast_response.json()
+
+        if forecast_response.status_code == 200:
+            next_slot = forecast_json["list"][0]
+
+            forecast_temp = next_slot["main"]["temp"]
+            forecast_humidity = next_slot["main"]["humidity"]
+
+            if "rain" in next_slot and "3h" in next_slot["rain"]:
+                forecast_rain = next_slot["rain"]["3h"]
+            else:
+                forecast_rain = 0
+
+    except Exception as e:
+        print("Forecast Error:", e)
+
     # ==============================
     # SENSOR READING
     # ==============================
-    if arduino and arduino.in_waiting > 0:
-        line = arduino.readline().decode('utf-8', errors='ignore').strip()
-        print("🔹 Serial:", line)
-
-        if "Soil" in line:
-            last_soil = int(line.split(":")[1].strip())
-
-        elif "Rain" in line:
-            last_rain = int(line.split(":")[1].strip())
-
     risk_score = 0
     risk_level = "LOW"
     rf_pred = None
@@ -169,6 +167,13 @@ def get_data():
                 )
                 last_alert_time = current_time
 
+        future_risk = "LOW"
+
+        if forecast_rain > 5 and risk_score >= 40:
+            future_risk = "HIGH"
+        elif forecast_rain > 2:
+            future_risk = "MEDIUM"
+
         # ==============================
         # LOG DATA
         # ==============================
@@ -197,7 +202,11 @@ def get_data():
         "humidity": humidity,
         "weather": weather_desc,
         "lat": lat,
-        "lon": lon
+        "lon": lon,
+        "forecast_temp": forecast_temp,
+        "forecast_humidity": forecast_humidity,
+        "forecast_rain": forecast_rain,
+        "future_risk": future_risk
     })
 
 
