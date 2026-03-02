@@ -3,89 +3,186 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Landslide Monitoring Dashboard</title>
+    <title>GeoGuard AI Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
     <style>
-        body { font-family: Arial, sans-serif; text-align: center; }
-        .container { width: 80%; margin: auto; }
-        h2 { color: #2c3e50; }
-        .status { font-size: 20px; font-weight: bold; margin-top: 10px; }
-        .safe { color: green; }
-        .warning { color: red; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h2>🌍 Landslide Monitoring Dashboard</h2>
-
-        <p><b>Soil Moisture:</b> <span id="soil_moisture">0</span></p>
-        <p><b>Rain Sensor:</b> <span id="rain_sensor">0</span></p>
-        <p class="status" id="landslide_status">Checking...</p>
-
-        <canvas id="sensorChart" width="400" height="200"></canvas>
-    </div>
-
-    <script>
-        const ctx = document.getElementById("sensorChart").getContext("2d");
-        let sensorChart = new Chart(ctx, {
-            type: "line",
-            data: {
-                labels: [],
-                datasets: [
-                    { label: "Soil Moisture", data: [], borderColor: "blue", fill: false },
-                    { label: "Rain Sensor", data: [], borderColor: "orange", fill: false }
-                ]
-            },
-            options: { responsive: true, maintainAspectRatio: false }
-        });
-
-        function fetchData() {
-            console.log(data);
-            fetch("/get_data")
-                .then(response => response.json())
-                .then(data => {
-                    document.getElementById("soil_moisture").innerText = data.soil_moisture;
-                    document.getElementById("rain_sensor").innerText = data.rain_sensor;
-                    document.getElementById("rf_confidence").innerText = data.rf_confidence ? data.rf_confidence + "%" : "--";
-                    document.getElementById("dt_confidence").innerText = data.dt_confidence ? data.dt_confidence + "%" : "--";
-                    document.getElementById("riskScore").innerText = data.risk_score ? data.risk_score + " %" : "--";
-                    document.getElementById("rf").innerText = data.rf_prediction ?? "--";
-                    document.getElementById("dt").innerText = data.dt_prediction ?? "--";
-                    
-                    let scoreElement = document.getElementById("riskScore");
-
-                    if (data.risk_score >= 70) {
-                        scoreElement.style.color = "#ef4444";
-                    } else if (data.risk_score >= 40) {
-                        scoreElement.style.color = "#facc15";
-                    } else {
-                        scoreElement.style.color = "#22c55e";
-                    }
-
-                    let statusEl = document.getElementById("landslide_status");
-                    if (data.landslide_occurrence === 1) {
-                        statusEl.innerText = "⚠️ Landslide Detected!";
-                        statusEl.className = "status warning";
-                    } else {
-                        statusEl.innerText = "✅ No Landslide";
-                        statusEl.className = "status safe";
-                    }
-
-                    // Update chart
-                    if (sensorChart.data.labels.length > 10) {
-                        sensorChart.data.labels.shift();
-                        sensorChart.data.datasets[0].data.shift();
-                        sensorChart.data.datasets[1].data.shift();
-                    }
-
-                    sensorChart.data.labels.push(new Date().toLocaleTimeString());
-                    sensorChart.data.datasets[0].data.push(data.soil_moisture);
-                    sensorChart.data.datasets[1].data.push(data.rain_sensor);
-                    sensorChart.update();
-                });
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background: #f4f6f9;
         }
 
-        setInterval(fetchData, 2000);
-    </script>
+        .container {
+            width: 85%;
+            margin: auto;
+        }
+
+        h2 {
+            color: #2c3e50;
+        }
+
+        .card {
+            background: white;
+            padding: 15px;
+            margin: 10px;
+            border-radius: 10px;
+            box-shadow: 0px 3px 10px rgba(0,0,0,0.1);
+        }
+
+        .status {
+            font-size: 20px;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+
+        .safe { color: green; }
+        .warning { color: red; }
+        .medium { color: orange; }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h2>🌍 GeoGuard AI – Landslide Monitoring</h2>
+
+        <div class="grid">
+            <div class="card">
+                <b>Soil Moisture</b>
+                <h3 id="soil_moisture">--</h3>
+            </div>
+
+            <div class="card">
+                <b>Rain Sensor</b>
+                <h3 id="rain_sensor">--</h3>
+            </div>
+
+            <div class="card">
+                <b>Risk Score</b>
+                <h3 id="riskScore">--</h3>
+            </div>
+
+            <div class="card">
+                <b>RF Prediction</b>
+                <h3 id="rf">--</h3>
+            </div>
+
+            <div class="card">
+                <b>DT Prediction</b>
+                <h3 id="dt">--</h3>
+            </div>
+
+            <div class="card">
+                <b>RF Confidence</b>
+                <h3 id="rfConfidence">--</h3>
+            </div>
+
+            <div class="card">
+                <b>DT Confidence</b>
+                <h3 id="dtConfidence">--</h3>
+            </div>
+        </div>
+
+        <p class="status" id="landslide_status">Checking...</p>
+
+        <div class="card">
+            <canvas id="sensorChart" height="100"></canvas>
+        </div>
+    </div>
+
+<script>
+const ctx = document.getElementById("sensorChart").getContext("2d");
+
+let sensorChart = new Chart(ctx, {
+    type: "line",
+    data: {
+        labels: [],
+        datasets: [
+            { label: "Soil Moisture", data: [], borderColor: "blue", fill: false },
+            { label: "Rain Sensor", data: [], borderColor: "orange", fill: false }
+        ]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false
+    }
+});
+
+function fetchData() {
+    fetch("/data")
+        .then(response => response.json())
+        .then(data => {
+
+            console.log("API DATA:", data);
+
+            document.getElementById("soil_moisture").innerText =
+                data.soil_moisture ?? "--";
+
+            document.getElementById("rain_sensor").innerText =
+                data.rain_sensor ?? "--";
+
+            document.getElementById("rf").innerText =
+                data.rf_prediction ?? "--";
+
+            document.getElementById("dt").innerText =
+                data.dt_prediction ?? "--";
+
+            document.getElementById("rfConfidence").innerText =
+                data.rf_confidence ? data.rf_confidence + "%" : "--";
+
+            document.getElementById("dtConfidence").innerText =
+                data.dt_confidence ? data.dt_confidence + "%" : "--";
+
+            document.getElementById("riskScore").innerText =
+                data.risk_score ? data.risk_score + "%" : "--";
+
+            let scoreElement = document.getElementById("riskScore");
+
+            if (data.risk_score >= 70) {
+                scoreElement.style.color = "red";
+            } else if (data.risk_score >= 40) {
+                scoreElement.style.color = "orange";
+            } else {
+                scoreElement.style.color = "green";
+            }
+
+            let statusEl = document.getElementById("landslide_status");
+
+            if (data.risk_level === "HIGH") {
+                statusEl.innerText = "⚠️ HIGH Landslide Risk!";
+                statusEl.className = "status warning";
+            } else if (data.risk_level === "MEDIUM") {
+                statusEl.innerText = "⚠️ MEDIUM Risk";
+                statusEl.className = "status medium";
+            } else {
+                statusEl.innerText = "✅ Risk Normal";
+                statusEl.className = "status safe";
+            }
+
+            // Chart update
+            if (sensorChart.data.labels.length > 15) {
+                sensorChart.data.labels.shift();
+                sensorChart.data.datasets[0].data.shift();
+                sensorChart.data.datasets[1].data.shift();
+            }
+
+            sensorChart.data.labels.push(new Date().toLocaleTimeString());
+            sensorChart.data.datasets[0].data.push(data.soil_moisture);
+            sensorChart.data.datasets[1].data.push(data.rain_sensor);
+
+            sensorChart.update();
+        });
+}
+
+setInterval(fetchData, 2000);
+fetchData();
+</script>
+
 </body>
 </html>

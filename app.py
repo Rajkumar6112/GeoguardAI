@@ -127,13 +127,6 @@ def get_data():
     rf_confidence = None
     dt_confidence = None
 
-    # Cloud fallback
-    if arduino is None:
-        if last_soil is None:
-            last_soil = np.random.randint(400, 900)
-        if last_rain is None:
-            last_rain = np.random.randint(300, 800)
-
     if last_soil is not None and last_rain is not None:
 
         features = pd.DataFrame(
@@ -155,8 +148,7 @@ def get_data():
         dt_confidence = round(dt_prob * 100, 2)
         
         # ✅ Risk Score (0–100)
-        avg_prob = (rf_prob + dt_prob) / 2
-        risk_score = round(avg_prob * 100, 2)
+        risk_score = round(((rf_prob + dt_prob)/2)*100,2)
 
         # ✅ Risk Level
         if risk_score >= 70:
