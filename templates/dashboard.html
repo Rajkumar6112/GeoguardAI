@@ -40,13 +40,14 @@
         });
 
         function fetchData() {
+            console.log(data);
             fetch("/get_data")
                 .then(response => response.json())
                 .then(data => {
                     document.getElementById("soil_moisture").innerText = data.soil_moisture;
                     document.getElementById("rain_sensor").innerText = data.rain_sensor;
-                    document.getElementById("rf_confidence").innerText = data.rf_confidence ?? "--";
-                    document.getElementById("dt_confidence").innerText = data.dt_confidence ?? "--";
+                    document.getElementById("rf_confidence").innerText = data.rf_confidence ? data.rf_confidence + "%" : "--";
+                    document.getElementById("dt_confidence").innerText = data.dt_confidence ? data.dt_confidence + "%" : "--";
                     document.getElementById("riskScore").innerText = data.risk_score ? data.risk_score + " %" : "--";
                     document.getElementById("rf").innerText = data.rf_prediction ?? "--";
                     document.getElementById("dt").innerText = data.dt_prediction ?? "--";

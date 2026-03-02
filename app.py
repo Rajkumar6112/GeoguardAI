@@ -57,6 +57,22 @@ if not os.path.exists("prediction_log.csv"):
 # ==============================
 # MAIN DATA ROUTE
 # ==============================
+@app.route("/sensor-data", methods=["POST"])
+def receive_sensor_data():
+    global last_soil, last_rain
+
+    data = request.get_json()
+
+    if not data:
+        return jsonify({"error": "No data received"}), 400
+
+    last_soil = data.get("soil")
+    last_rain = data.get("rain")
+
+    print("📡 Received from ESP8266:", last_soil, last_rain)
+
+    return jsonify({"status": "success"}), 200
+
 @app.route("/data")
 def get_data():
     global last_soil, last_rain, last_alert_time
@@ -135,12 +151,12 @@ def get_data():
         rf_prob = rf_model.predict_proba(features_scaled)[0][1]
         dt_prob = dt_model.predict_proba(features_scaled)[0][1]
 
+        rf_confidence = round(rf_prob * 100, 2)
+        dt_confidence = round(dt_prob * 100, 2)
+        
         # ✅ Risk Score (0–100)
         avg_prob = (rf_prob + dt_prob) / 2
         risk_score = round(avg_prob * 100, 2)
-
-        rf_confidence = round(rf_prob * 100, 2)
-        dt_confidence = round(dt_prob * 100, 2)
 
         # ✅ Risk Level
         if risk_score >= 70:
