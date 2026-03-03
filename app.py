@@ -202,7 +202,6 @@ def get_data():
         # ==============================
         # FUTURE RISK SERIES (AFTER ML)
         # ==============================
-        future_risk_series = []
 
         if forecast_rain is not None:
             try:
