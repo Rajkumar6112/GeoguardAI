@@ -88,6 +88,7 @@ def get_data():
     humidity = 0
     weather_desc = "Unavailable"
     city_name = city if city else "Unknown"
+    future_risk_series = []
     forecast_rain = 0
     forecast_temp = 0
     forecast_humidity = 0
@@ -120,7 +121,6 @@ def get_data():
             forecast_response = requests.get(forecast_url, timeout = 5)
             forecast_json = forecast_response.json()
 
-            future_risk_series = []
 
             if forecast_response.status_code == 200:
                 forecast_list = forecast_json["list"]
@@ -131,25 +131,6 @@ def get_data():
             forecast_temp = next_slot["main"]["temp"]
             forecast_humidity = next_slot["main"]["humidity"]
             forecast_rain = next_slot.get("rain", {}).get("3h", 0)
-
-            # 🔹 Now generate 5-step future prediction
-            for slot in forecast_list[:5]:
-                f_rain = slot.get("rain", {}).get("3h", 0)
-
-                # Start from current risk score
-                future_score = risk_score
-
-                if f_rain > 5:
-                    future_score += 20
-                elif f_rain > 2:
-                    future_score += 10
-
-                if future_score >= 70:
-                    future_risk_series.append(2)
-                elif future_score >= 40:
-                    future_risk_series.append(1)
-                else:
-                    future_risk_series.append(0)
             
             # Save to cache
             cached_weather = {
@@ -161,7 +142,8 @@ def get_data():
                 "lon": lon,
                 "forecast_temp": forecast_temp,
                 "forecast_humidity": forecast_humidity,
-                "forecast_rain": forecast_rain
+                "forecast_rain": forecast_rain,
+                "future_risk_series": future_risk_series
             }
 
             last_weather_time = current_time
@@ -217,11 +199,38 @@ def get_data():
         elif risk_score >= 40:
             risk_level = "MEDIUM"
 
-        # Future risk logic
-        if forecast_rain > 5 and risk_score >= 40:
-            future_risk = "HIGH"
-        elif forecast_rain > 2:
-            future_risk = "MEDIUM"
+        # ==============================
+        # FUTURE RISK SERIES (AFTER ML)
+        # ==============================
+        future_risk_series = []
+
+        if forecast_rain is not None:
+            try:
+                forecast_response = requests.get(forecast_url, timeout=5)
+                forecast_json = forecast_response.json()
+
+                if forecast_response.status_code == 200:
+                    forecast_list = forecast_json["list"][:5]
+
+                    for slot in forecast_list:
+                        f_rain = slot.get("rain", {}).get("3h", 0)
+
+                        future_score = risk_score
+
+                        if f_rain > 5:
+                            future_score += 20
+                        elif f_rain > 2:
+                            future_score += 10
+
+                        if future_score >= 70:
+                            future_risk_series.append(2)
+                        elif future_score >= 40:
+                            future_risk_series.append(1)
+                        else:
+                            future_risk_series.append(0)
+
+            except Exception as e:
+                print("Future forecast error:", e)
 
         # Telegram alert
         if risk_level == "HIGH":
@@ -261,7 +270,7 @@ def get_data():
         "forecast_temp": forecast_temp,
         "forecast_humidity": forecast_humidity,
         "forecast_rain": forecast_rain,
-        "future_risk": future_risk
+        "future_risk_series": future_risk_series
     })
 
 # ==============================
