@@ -120,12 +120,37 @@ def get_data():
             forecast_response = requests.get(forecast_url, timeout = 5)
             forecast_json = forecast_response.json()
 
-            if forecast_response.status_code == 200:
-                next_slot = forecast_json["list"][0]
-                forecast_temp = next_slot["main"]["temp"]
-                forecast_humidity = next_slot["main"]["humidity"]
-                forecast_rain = next_slot.get("rain", {}).get("3h", 0)
+            future_risk_series = []
 
+            if forecast_response.status_code == 200:
+                forecast_list = forecast_json["list"]
+
+            # 🔹 Keep next immediate slot for display
+            next_slot = forecast_list[0]
+
+            forecast_temp = next_slot["main"]["temp"]
+            forecast_humidity = next_slot["main"]["humidity"]
+            forecast_rain = next_slot.get("rain", {}).get("3h", 0)
+
+            # 🔹 Now generate 5-step future prediction
+            for slot in forecast_list[:5]:
+                f_rain = slot.get("rain", {}).get("3h", 0)
+
+                # Start from current risk score
+                future_score = risk_score
+
+                if f_rain > 5:
+                    future_score += 20
+                elif f_rain > 2:
+                    future_score += 10
+
+                if future_score >= 70:
+                    future_risk_series.append(2)
+                elif future_score >= 40:
+                    future_risk_series.append(1)
+                else:
+                    future_risk_series.append(0)
+            
             # Save to cache
             cached_weather = {
                 "temperature": temperature,

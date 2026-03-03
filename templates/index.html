@@ -230,6 +230,11 @@
             <canvas id="rainChart" height="120"></canvas>
         </div>
 
+        <div class="card" style="grid-column: 1 / -1;">
+            <div class="label">FUTURE RISK FORECAST</div>
+            <canvas id="futureRiskChart" height="120"></canvas>
+        </div>
+
         <div class="card">
             <div class="label">RISK SCORE (0–100)</div>
             <div class="value" id="riskScore">--</div>
@@ -300,7 +305,39 @@
                 responsive: true
             }
         });
-        
+
+        const futureCtx = document.getElementById("futureRiskChart").getContext("2d");
+
+        const futureRiskChart = new Chart(futureCtx, {
+            type: "line",
+            data: {
+                labels: ["+3h","+6h","+9h","+12h","+15h"],
+                datasets: [{
+                    label: "Future Risk",
+                    data: [],
+                    borderColor: "#f97316",
+                    backgroundColor: "rgba(249,115,22,0.2)",
+                    tension: 0.3
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        min: 0,
+                        max: 2,
+                        ticks: {
+                            callback: function(value) {
+                                if (value === 0) return "LOW";
+                                if (value === 1) return "MEDIUM";
+                                if (value === 2) return "HIGH";
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
         let riskHistory = [];
         let rainHistory = [];
 
@@ -403,6 +440,10 @@
         // =========================
         function fetchData() {
 
+            if (data.future_risk_series) {
+                futureRiskChart.data.datasets[0].data = data.future_risk_series;
+                futureRiskChart.update();
+            }
             let url;
 
             if (deviceLat && deviceLon) {
@@ -414,6 +455,7 @@
             fetch(url)
                 .then(response => response.json())
                 .then(data => {
+                    console.log(data)
 
                     if (data.error) {
                         document.getElementById("risk").innerText = data.error;
