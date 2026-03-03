@@ -246,213 +246,214 @@
     </div>
 
     <script>
-    let riskHistory = [];
-    let rainHistory = [];
+    
+        let riskHistory = [];
+        let rainHistory = [];
 
-    let deviceLat = null;
-    let deviceLon = null;
+        let deviceLat = null;
+        let deviceLon = null;
 
-    let selectedCity = "Coimbatore";
+        let selectedCity = "Coimbatore";
 
-    // =========================
-    // GET DEVICE LOCATION
-    // =========================
-    function getLocation() {
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                position => {
-                    deviceLat = position.coords.latitude;
-                    deviceLon = position.coords.longitude;
+        // =========================
+        // GET DEVICE LOCATION
+        // =========================
+        function getLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    position => {
+                        deviceLat = position.coords.latitude;
+                        deviceLon = position.coords.longitude;
 
-                    document.getElementById("location").innerText =
-                        `Lat: ${deviceLat.toFixed(4)}, Lon: ${deviceLon.toFixed(4)}`;
+                        document.getElementById("location").innerText =
+                            `Lat: ${deviceLat.toFixed(4)}, Lon: ${deviceLon.toFixed(4)}`;
 
-                    // Auto fetch using device location
-                    fetchData();
-                },
-                error => {
-                    document.getElementById("location").innerText =
-                        "Location permission denied";
+                        // Auto fetch using device location
+                        fetchData();
+                    },
+                    error => {
+                        document.getElementById("location").innerText =
+                            "Location permission denied";
 
-                    // Fallback to city
-                    fetchData();
-                },
-                {
-                    enableHighAccuracy: true,
-                    timeout: 10000,
-                    maximumAge: 0
-                }
-            );
-        } else {
-            document.getElementById("location").innerText =
-                "Geolocation not supported";
+                        // Fallback to city
+                        fetchData();
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 0
+                    }
+                );
+            } else {
+                document.getElementById("location").innerText =
+                    "Geolocation not supported";
+            fetchData();
+            }
+        }
+
+        // =========================
+        // SEARCH CITY
+        // =========================
+        function searchCity() {
+            const input = document.getElementById("cityInput").value.trim();
+            if (input === "") {
+                alert("Please enter a city name");
+                return;
+            }
+
+            selectedCity = input;
+
+            // Clear device location so city mode activates
+            deviceLat = null;
+            deviceLon = null;
+
             fetchData();
         }
-    }
 
-    // =========================
-    // SEARCH CITY
-    // =========================
-    function searchCity() {
-        const input = document.getElementById("cityInput").value.trim();
-        if (input === "") {
-            alert("Please enter a city name");
-            return;
-        }
+        // =========================
+        // MAP INITIALIZATION
+        // =========================
+        let map = L.map('map').setView([11.0168, 76.9558], 10);
 
-        selectedCity = input;
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
 
-        // Clear device location so city mode activates
-        deviceLat = null;
-        deviceLon = null;
+        let marker = L.marker([11.0168, 76.9558]).addTo(map);
 
-        fetchData();
-    }
+        function updateMap(lat, lon, risk) {
+            map.setView([lat, lon], 10, { animate: true });
+            marker.setLatLng([lat, lon]);
 
-    // =========================
-    // MAP INITIALIZATION
-    // =========================
-    let map = L.map('map').setView([11.0168, 76.9558], 10);
+            let color = "green";
+            if (risk === "MEDIUM") color = "orange";
+            if (risk === "HIGH") color = "red";
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors'
-    }).addTo(map);
-
-    let marker = L.marker([11.0168, 76.9558]).addTo(map);
-
-    function updateMap(lat, lon, risk) {
-        map.setView([lat, lon], 10, { animate: true });
-        marker.setLatLng([lat, lon]);
-
-        let color = "green";
-        if (risk === "MEDIUM") color = "orange";
-        if (risk === "HIGH") color = "red";
-
-        let icon = L.divIcon({
-            className: '',
-            html: `<div style="
-                background:${color};
-                width:18px;
-                height:18px;
-                border-radius:50%;
-                border:3px solid white;
-                box-shadow:0 0 10px ${color};
-            "></div>`
-        });
-
-        marker.setIcon(icon);
-    }
-
-    // =========================
-    // FETCH DATA
-    // =========================
-    function fetchData() {
-
-        let url;
-
-        if (deviceLat && deviceLon) {
-            url = `/data?lat=${deviceLat}&lon=${deviceLon}`;
-        } else {
-            url = `/data?city=${selectedCity}`;
-        }
-
-        fetch(url)
-            .then(response => response.json())
-            .then(data => {
-
-                if (data.error) {
-                    document.getElementById("risk").innerText = data.error;
-                    return;
-                }
-
-                document.getElementById("soil").innerText = data.soil_moisture ?? "--";
-                document.getElementById("rain").innerText = data.rain_sensor ?? "--";
-                document.getElementById("rf").innerText = data.rf_prediction ?? "--";
-                document.getElementById("dt").innerText = data.dt_prediction ?? "--";
-                document.getElementById("temperature").innerText = data.temperature ?? "--";
-                document.getElementById("humidity").innerText = data.humidity ?? "--";
-                document.getElementById("city").innerText = data.city ?? "--";
-                document.getElementById("rfConfidence").innerText =
-                    data.rf_confidence != null ? data.rf_confidence + "%" : "--";
-                document.getElementById("dtConfidence").innerText =
-                    data.dt_confidence != null ? data.dt_confidence + "%" : "--";
-                document.getElementById("riskScore").innerText =
-                    data.risk_score != null ? data.risk_score + "%" : "--";
-
-                const agreementText = document.getElementById("agreement");
-
-                if (data.rf_prediction === data.dt_prediction) {
-                    agreementText.innerText = "STRONG";
-                    agreementText.style.color = "#22c55e";
-                } else {
-                    agreementText.innerText = "WEAK";
-                    agreementText.style.color = "#facc15";
-                }
-
-                // RISK DISPLAY
-                const riskBox = document.getElementById("riskBox");
-                const riskText = document.getElementById("risk");
-
-                riskText.innerText = data.risk_level;
-
-                riskBox.className = "risk-box";
-
-                if (data.risk_level === "LOW")
-                    riskBox.classList.add("risk-low");
-                else if (data.risk_level === "MEDIUM")
-                    riskBox.classList.add("risk-medium");
-                else if (data.risk_level === "HIGH")
-                    riskBox.classList.add("risk-high");
-
-                // ALERT
-                const alertBox = document.getElementById("alertBox");
-                const alertSound = document.getElementById("alertSound");
-
-                if (data.risk_level === "HIGH") {
-                    alertBox.style.display = "block";
-                    alertSound.play();
-                } else {
-                    alertBox.style.display = "none";
-                    alertSound.pause();
-                    alertSound.currentTime = 0;
-                }
-
-                // RISK CHART
-                let riskValue =
-                    data.risk_level === "HIGH" ? 2 :
-                    data.risk_level === "MEDIUM" ? 1 : 0;
-
-                riskHistory.push(riskValue);
-                if (riskHistory.length > 20) riskHistory.shift();
-
-                riskChart.data.labels = riskHistory.map((_, i) => i + 1);
-                riskChart.data.datasets[0].data = riskHistory;
-                riskChart.update();
-
-                // RAIN CHART
-                if (data.rain_sensor != null) {
-                    rainHistory.push(data.rain_sensor);
-                    if (rainHistory.length > 20) rainHistory.shift();
-
-                    rainChart.data.labels = rainHistory.map((_, i) => i + 1);
-                    rainChart.data.datasets[0].data = rainHistory;
-                    rainChart.update();
-                }
-
-                // MAP UPDATE
-                if (data.lat && data.lon) {
-                    updateMap(data.lat, data.lon, data.risk_level);
-                }
-            })
-            .catch(err => {
-                console.error("Error fetching data:", err);
+            let icon = L.divIcon({
+                className: '',
+                html: `<div style="
+                    background:${color};
+                    width:18px;
+                    height:18px;
+                    border-radius:50%;
+                    border:3px solid white;
+                    box-shadow:0 0 10px ${color};
+                "></div>`
             });
-    }
 
-    // Start
-    getLocation();
-    setInterval(fetchData, 3000);
-</script>
+            marker.setIcon(icon);
+        }
+
+        // =========================
+        // FETCH DATA
+        // =========================
+        function fetchData() {
+
+            let url;
+
+            if (deviceLat && deviceLon) {
+                url = `/data?lat=${deviceLat}&lon=${deviceLon}`;
+            } else {
+                url = `/data?city=${selectedCity}`;
+            }
+
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+
+                    if (data.error) {
+                        document.getElementById("risk").innerText = data.error;
+                        return;
+                    }
+
+                    document.getElementById("soil").innerText = data.soil_moisture ?? "--";
+                    document.getElementById("rain").innerText = data.rain_sensor ?? "--";
+                    document.getElementById("rf").innerText = data.rf_prediction ?? "--";
+                    document.getElementById("dt").innerText = data.dt_prediction ?? "--";
+                    document.getElementById("temperature").innerText = data.temperature ?? "--";
+                    document.getElementById("humidity").innerText = data.humidity ?? "--";
+                    document.getElementById("city").innerText = data.city ?? "--";
+                    document.getElementById("rfConfidence").innerText =
+                        data.rf_confidence != null ? data.rf_confidence + "%" : "--";
+                    document.getElementById("dtConfidence").innerText =
+                        data.dt_confidence != null ? data.dt_confidence + "%" : "--";
+                    document.getElementById("riskScore").innerText =
+                        data.risk_score != null ? data.risk_score + "%" : "--";
+
+                    const agreementText = document.getElementById("agreement");
+
+                    if (data.rf_prediction === data.dt_prediction) {
+                        agreementText.innerText = "STRONG";
+                        agreementText.style.color = "#22c55e";
+                    } else {
+                        agreementText.innerText = "WEAK";
+                        agreementText.style.color = "#facc15";
+                    }
+
+                    // RISK DISPLAY
+                    const riskBox = document.getElementById("riskBox");
+                    const riskText = document.getElementById("risk");
+
+                    riskText.innerText = data.risk_level;
+
+                    riskBox.className = "risk-box";
+
+                    if (data.risk_level === "LOW")
+                        riskBox.classList.add("risk-low");
+                    else if (data.risk_level === "MEDIUM")
+                        riskBox.classList.add("risk-medium");
+                    else if (data.risk_level === "HIGH")
+                        riskBox.classList.add("risk-high");
+
+                    // ALERT
+                    const alertBox = document.getElementById("alertBox");
+                    const alertSound = document.getElementById("alertSound");
+
+                    if (data.risk_level === "HIGH") {
+                        alertBox.style.display = "block";
+                        alertSound.play();
+                    } else {
+                        alertBox.style.display = "none";
+                        alertSound.pause();
+                        alertSound.currentTime = 0;
+                    }
+
+                    // RISK CHART
+                    let riskValue =
+                        data.risk_level === "HIGH" ? 2 :
+                        data.risk_level === "MEDIUM" ? 1 : 0;
+
+                    riskHistory.push(riskValue);
+                    if (riskHistory.length > 20) riskHistory.shift();
+
+                    riskChart.data.labels = riskHistory.map((_, i) => i + 1);
+                    riskChart.data.datasets[0].data = riskHistory;
+                    riskChart.update();
+
+                    // RAIN CHART
+                    if (data.rain_sensor != null) {
+                        rainHistory.push(data.rain_sensor);
+                        if (rainHistory.length > 20) rainHistory.shift();
+
+                        rainChart.data.labels = rainHistory.map((_, i) => i + 1);
+                        rainChart.data.datasets[0].data = rainHistory;
+                        rainChart.update();
+                    }
+
+                    // MAP UPDATE
+                    if (data.lat && data.lon) {
+                        updateMap(data.lat, data.lon, data.risk_level);
+                    }
+                })
+                .catch(err => {
+                    console.error("Error fetching data:", err);
+                });
+        }
+
+        // Start
+        getLocation();
+        setInterval(fetchData, 3000);
+    </script>
 
     <audio id="alertSound">
         <source src="https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg" type="audio/ogg">
