@@ -246,7 +246,61 @@
     </div>
 
     <script>
-    
+        // =========================
+        // CHART INITIALIZATION
+        // =========================
+
+        const ctx = document.getElementById("riskChart").getContext("2d");
+
+        const riskChart = new Chart(ctx, {
+            type: "line",
+            data: {
+                labels: [],
+                datasets: [{
+                    label: "Risk Level",
+                    data: [],
+                    borderColor: "#ef4444",
+                    backgroundColor: "rgba(239, 68, 68, 0.2)",
+                    tension: 0.3
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        min: 0,
+                        max: 2,
+                        ticks: {
+                            callback: function(value) {
+                                if (value === 0) return "LOW";
+                                if (value === 1) return "MEDIUM";
+                                if (value === 2) return "HIGH";
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        const rainCtx = document.getElementById("rainChart").getContext("2d");
+
+        const rainChart = new Chart(rainCtx, {
+            type: "line",
+            data: {
+                labels: [],
+                datasets: [{
+                    label: "Rain Sensor Value",
+                    data: [],
+                    borderColor: "#38bdf8",
+                    backgroundColor: "rgba(56,189,248,0.2)",
+                    tension: 0.3
+                }]
+            },
+            options: {
+                responsive: true
+            }
+        });
+        
         let riskHistory = [];
         let rainHistory = [];
 
