@@ -106,7 +106,7 @@ def get_data():
                 weather_url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}&units=metric"
                 forecast_url = f"http://api.openweathermap.org/data/2.5/forecast?q={city}&appid={api_key}&units=metric"
 
-            weather_response = requests.get(weather_url)
+            weather_response = requests.get(weather_url, timeout = 5)
             weather_json = weather_response.json()
 
             if weather_response.status_code == 200:
@@ -117,7 +117,7 @@ def get_data():
                 lat = weather_json["coord"]["lat"]
                 lon = weather_json["coord"]["lon"]
 
-            forecast_response = requests.get(forecast_url)
+            forecast_response = requests.get(forecast_url, timeout = 5)
             forecast_json = forecast_response.json()
 
             if forecast_response.status_code == 200:
