@@ -57,66 +57,107 @@ def receive_sensor_data():
 
     return jsonify({"status": "success"}), 200
 
+# ==============================
+# WEATHER CACHE
+# ==============================
+last_weather_time = 0
+cached_weather = {}
+
 @app.route("/data")
 def get_data():
     global last_soil, last_rain, last_alert_time
+    global last_weather_time, cached_weather
 
-    city = request.args.get("city", "Coimbatore")
+    # ==============================
+    # GET LOCATION INPUT
+    # ==============================
+    lat = request.args.get("lat")
+    lon = request.args.get("lon")
+    city = request.args.get("city")
 
+    api_key = os.environ.get("OPENWEATHER_API_KEY")
+
+    # Default location (Coimbatore)
+    if not lat and not lon and not city:
+        city = "Coimbatore"
+
+    # ==============================
+    # WEATHER FETCH (CACHED 5 MIN)
+    # ==============================
     temperature = 0
     humidity = 0
     weather_desc = "Unavailable"
-    city_name = city
-    lat = None
-    lon = None
-
-    # ==============================
-    # WEATHER FETCH
-    # ==============================
-    api_key = os.environ.get("OPENWEATHER_API_KEY")
-    weather_url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}&units=metric"
-
-    try:
-        response = requests.get(weather_url)
-        weather_json = response.json()
-
-        if response.status_code == 200 and "main" in weather_json:
-            temperature = weather_json["main"]["temp"]
-            humidity = weather_json["main"]["humidity"]
-            weather_desc = weather_json["weather"][0]["description"]
-            city_name = weather_json["name"]
-            lat = weather_json["coord"]["lat"]
-            lon = weather_json["coord"]["lon"]
-
-    except Exception as e:
-        print("Weather Error:", e)
-
+    city_name = city if city else "Unknown"
     forecast_rain = 0
-    forecast_humidity = 0
     forecast_temp = 0
+    forecast_humidity = 0
 
-    forecast_url = f"http://api.openweathermap.org/data/2.5/forecast?q={city}&appid={api_key}&units=metric"
+    current_time = time.time()
 
-    try:
-        forecast_response = requests.get(forecast_url)
-        forecast_json = forecast_response.json()
+    if current_time - last_weather_time > 300:  # 5 minutes cache
 
-        if forecast_response.status_code == 200:
-            next_slot = forecast_json["list"][0]
-
-            forecast_temp = next_slot["main"]["temp"]
-            forecast_humidity = next_slot["main"]["humidity"]
-
-            if "rain" in next_slot and "3h" in next_slot["rain"]:
-                forecast_rain = next_slot["rain"]["3h"]
+        try:
+            if lat and lon:
+                lat = float(lat)
+                lon = float(lon)
+                weather_url = f"http://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={api_key}&units=metric"
+                forecast_url = f"http://api.openweathermap.org/data/2.5/forecast?lat={lat}&lon={lon}&appid={api_key}&units=metric"
             else:
-                forecast_rain = 0
+                weather_url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}&units=metric"
+                forecast_url = f"http://api.openweathermap.org/data/2.5/forecast?q={city}&appid={api_key}&units=metric"
 
-    except Exception as e:
-        print("Forecast Error:", e)
+            weather_response = requests.get(weather_url)
+            weather_json = weather_response.json()
+
+            if weather_response.status_code == 200:
+                temperature = weather_json["main"]["temp"]
+                humidity = weather_json["main"]["humidity"]
+                weather_desc = weather_json["weather"][0]["description"]
+                city_name = weather_json["name"]
+                lat = weather_json["coord"]["lat"]
+                lon = weather_json["coord"]["lon"]
+
+            forecast_response = requests.get(forecast_url)
+            forecast_json = forecast_response.json()
+
+            if forecast_response.status_code == 200:
+                next_slot = forecast_json["list"][0]
+                forecast_temp = next_slot["main"]["temp"]
+                forecast_humidity = next_slot["main"]["humidity"]
+                forecast_rain = next_slot.get("rain", {}).get("3h", 0)
+
+            # Save to cache
+            cached_weather = {
+                "temperature": temperature,
+                "humidity": humidity,
+                "weather_desc": weather_desc,
+                "city_name": city_name,
+                "lat": lat,
+                "lon": lon,
+                "forecast_temp": forecast_temp,
+                "forecast_humidity": forecast_humidity,
+                "forecast_rain": forecast_rain
+            }
+
+            last_weather_time = current_time
+
+        except Exception as e:
+            print("Weather API Error:", e)
+
+    else:
+        # Use cached data
+        temperature = cached_weather.get("temperature", 0)
+        humidity = cached_weather.get("humidity", 0)
+        weather_desc = cached_weather.get("weather_desc", "Unavailable")
+        city_name = cached_weather.get("city_name", city_name)
+        lat = cached_weather.get("lat", lat)
+        lon = cached_weather.get("lon", lon)
+        forecast_temp = cached_weather.get("forecast_temp", 0)
+        forecast_humidity = cached_weather.get("forecast_humidity", 0)
+        forecast_rain = cached_weather.get("forecast_rain", 0)
 
     # ==============================
-    # SENSOR READING
+    # ML PREDICTION
     # ==============================
     risk_score = 0
     risk_level = "LOW"
@@ -124,6 +165,7 @@ def get_data():
     dt_pred = None
     rf_confidence = None
     dt_confidence = None
+    future_risk = "LOW"
 
     if last_soil is not None and last_rain is not None:
 
@@ -134,49 +176,37 @@ def get_data():
 
         features_scaled = scaler.transform(features)
 
-        # ✅ Proper Predictions
         rf_pred = rf_model.predict(features_scaled)[0]
         dt_pred = dt_model.predict(features_scaled)[0]
 
-        # ✅ Proper Probabilities
         rf_prob = rf_model.predict_proba(features_scaled)[0][1]
         dt_prob = dt_model.predict_proba(features_scaled)[0][1]
 
         rf_confidence = round(rf_prob * 100, 2)
         dt_confidence = round(dt_prob * 100, 2)
-        
-        # ✅ Risk Score (0–100)
-        risk_score = round(((rf_prob + dt_prob)/2)*100,2)
 
-        # ✅ Risk Level
+        risk_score = round(((rf_prob + dt_prob) / 2) * 100, 2)
+
         if risk_score >= 70:
             risk_level = "HIGH"
         elif risk_score >= 40:
             risk_level = "MEDIUM"
-        else:
-            risk_level = "LOW"
-        
-        # ==============================
-        # TELEGRAM ALERT (Cooldown 60s)
-        # ==============================
+
+        # Future risk logic
+        if forecast_rain > 5 and risk_score >= 40:
+            future_risk = "HIGH"
+        elif forecast_rain > 2:
+            future_risk = "MEDIUM"
+
+        # Telegram alert
         if risk_level == "HIGH":
-            current_time = time.time()
             if current_time - last_alert_time > 60:
                 send_telegram_alert(
                     f"⚠️ HIGH Landslide Risk!\nCity: {city_name}\nRisk Score: {risk_score}%"
                 )
                 last_alert_time = current_time
 
-        future_risk = "LOW"
-
-        if forecast_rain > 5 and risk_score >= 40:
-            future_risk = "HIGH"
-        elif forecast_rain > 2:
-            future_risk = "MEDIUM"
-
-        # ==============================
-        # LOG DATA
-        # ==============================
+        # Log data
         with open("prediction_log.csv", "a", newline="") as file:
             writer = csv.writer(file)
             writer.writerow([
@@ -208,7 +238,6 @@ def get_data():
         "forecast_rain": forecast_rain,
         "future_risk": future_risk
     })
-
 
 # ==============================
 # TELEGRAM FUNCTION
