@@ -440,10 +440,6 @@
         // =========================
         function fetchData() {
 
-            if (data.future_risk_series) {
-                futureRiskChart.data.datasets[0].data = data.future_risk_series;
-                futureRiskChart.update();
-            }
             let url;
 
             if (deviceLat && deviceLon) {
@@ -451,7 +447,7 @@
             } else {
                 url = `/data?city=${selectedCity}`;
             }
-
+            
             fetch(url)
                 .then(response => response.json())
                 .then(data => {
@@ -544,6 +540,10 @@
                 .catch(err => {
                     console.error("Error fetching data:", err);
                 });
+            if (data.future_risk_series) {
+                futureRiskChart.data.datasets[0].data = data.future_risk_series;
+                futureRiskChart.update();
+            }
         }
 
         // Start
