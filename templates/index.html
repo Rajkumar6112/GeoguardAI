@@ -440,14 +440,12 @@
         // =========================
         function fetchData() {
 
-            let url;
-
             if (deviceLat && deviceLon) {
                 url = `/data?lat=${deviceLat}&lon=${deviceLon}`;
             } else {
                 url = `/data?city=${selectedCity}`;
             }
-            
+
             fetch(url)
                 .then(response => response.json())
                 .then(data => {
@@ -536,14 +534,17 @@
                     if (data.lat && data.lon) {
                         updateMap(data.lat, data.lon, data.risk_level);
                     }
+
+                    if (data.future_risk_series) {
+                        futureRiskChart.data.datasets[0].data = data.future_risk_series;
+                        futureRiskChart.update();
+                    }
+                    
+            let url;
                 })
                 .catch(err => {
                     console.error("Error fetching data:", err);
                 });
-            if (data.future_risk_series) {
-                futureRiskChart.data.datasets[0].data = data.future_risk_series;
-                futureRiskChart.update();
-            }
         }
 
         // Start
