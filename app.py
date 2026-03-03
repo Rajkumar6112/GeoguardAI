@@ -208,7 +208,7 @@ def get_data():
 
             future_score = risk_score
 
-            if f_rain > 5:
+            if f_rain >= 0:
                 future_score += 20
             elif f_rain > 2:
                 future_score += 10
